@@ -1,0 +1,12 @@
+{
+  "domain": "auto_sensor_aggregator",
+  "name": "Auto sensor aggregator",
+  "codeowners": [
+    "@pinguet62"
+  ],
+  "dependencies": [],
+  "documentation": "https://github.com/pinguet62/ha_auto_sensor_aggregator",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "version": "0.0.1"
+}
