@@ -3,9 +3,12 @@ from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, Sen
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, Event, EventStateChangedData
+from homeassistant.helpers import entity_registry as get_entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from typing import List
+
+from .const import CONF_FILTER_KEY, CONF_FILTER_DEFAULT, CONF_LABEL_KEY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,12 +20,13 @@ async def async_setup_entry(
 ) -> None:
     _LOGGER.info("Initialisation de AvgTemperatureSensorEntity")
     # TODO pressure & humidite
-    async_add_entities([AvgTemperatureSensorEntity(hass)], True)
+    async_add_entities([AvgTemperatureSensorEntity(hass, config_entry)], True)
 
 
 class AvgTemperatureSensorEntity(SensorEntity):
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.__hass = hass
+        self.__config_entry = config_entry
 
         self._attr_name = "Temperature AVG"  # TODO parameterizable
         self._attr_unique_id = "autosensoraggregator_temperature"
@@ -44,14 +48,34 @@ class AvgTemperatureSensorEntity(SensorEntity):
         self.async_write_ha_state()
 
     def __list_tracked_entity_ids(self) -> List[SensorEntity]:
+        entity_registry = get_entity_registry.async_get(self.__hass)
         list = []
         for state in self.__hass.states.async_all("sensor"):
             if state.entity_id == self.entity_id:
                 continue  # ignore itself
             if state.attributes.get("device_class") != self._attr_device_class:
                 continue
-            # TODO filter (inclusion/exclusion) on "labels"
+
+            entity_entry = entity_registry.async_get(state.entity_id)
+            if entity_entry and entity_entry.labels:
+                labels = entity_entry.labels
+            else:
+                labels = {}
+            filter = self.__config_entry.options.get(CONF_FILTER_KEY, CONF_FILTER_DEFAULT)
+            label = self.__config_entry.options.get(CONF_LABEL_KEY, None)
+            if filter is CONF_FILTER_VALUE_ALL:
+                accepted = True
+            elif filter is CONF_FILTER_VALUE_INCLUDE:
+                accepted = label in labels
+            elif filter is CONF_FILTER_VALUE_EXCLUDE:
+                accepted = label not in labels
+            else:
+                raise Error(f"Unknown filter {filter}")
+            if not accepted:
+                continue
+
             list.append(state.entity_id)
+
         return list
 
     def __recalculate_average(self, entity_ids: list[str]) -> None:
